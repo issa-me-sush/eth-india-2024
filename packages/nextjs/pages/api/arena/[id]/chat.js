@@ -73,6 +73,14 @@ export default async function handler(req, res) {
       timestamp: new Date()
     });
 
+    try {
+      await tournament.save();
+      console.log('Message stored successfully');
+    } catch (saveError) {
+      console.error('Error saving tournament:', saveError);
+      return res.status(500).json({ error: 'Failed to store message' });
+    }
+
     // Update participant attempts if needed
     if (isSuccess || tournament.mode === 'TWENTY_QUESTIONS') {
       participant.attemptsLeft -= 1;
@@ -227,6 +235,7 @@ async function handleDebateResponse(message, topic) {
         {
           "role": "system",
           "content": `You are an AI judge in a debate about "${topic}". 
+            The bot is arguing "for" the topic, and the users are arguing "against". 
             Evaluate arguments for clarity, logic, and evidence. 
             Provide constructive feedback and encourage high-quality discussion.`
         },

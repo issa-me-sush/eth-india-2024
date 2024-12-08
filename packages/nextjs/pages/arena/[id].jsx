@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/router';
 import { usePrivy, useWallets } from '@privy-io/react-auth';
 import { toast } from 'react-hot-toast';
+import { ethers } from 'ethers';
 
 const Message = ({ message }) => {
   const isUser = message.role === 'user';
@@ -37,6 +38,9 @@ export default function Arena() {
   const messagesEndRef = useRef(null);
   const [canSendMessages, setCanSendMessages] = useState(false);
   const [attempts, setAttempts] = useState(0);
+  const [enteringStates, setEnteringStates] = useState({});
+  const [userAttempts, setUserAttempts] = useState({});
+  const [winners, setWinners] = useState([]);
 
   useEffect(() => {
     if (id) {
@@ -148,6 +152,94 @@ export default function Arena() {
     }
   };
 
+  const enterTournament = async (tournament) => {
+    if (!authenticated) {
+      return router.push('/login');
+    }
+
+    try {
+      setEnteringStates(prev => ({
+        ...prev,
+        [tournament._id]: true
+      }));
+
+      const wallet = wallets[0];
+      
+      if (!wallet || !window.ethereum) {
+        throw new Error('No wallet connected');
+      }
+
+      const provider = new ethers.providers.Web3Provider(window.ethereum);
+      const signer = provider.getSigner();
+      const userAddress = await signer.getAddress();
+
+      await window.ethereum.request({ method: 'eth_requestAccounts' });
+
+      const tx = await signer.sendTransaction({
+        to: tournament.treasuryAddress,
+        value: ethers.utils.parseEther(tournament.entryFee.toString()),
+        chainId: 84532
+      });
+
+      await tx.wait();
+
+      const response = await fetch(`/api/tournaments/${tournament._id}/enter`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          userAddress,
+          transactionHash: tx.hash
+        }),
+      });
+
+      const data = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to enter tournament');
+      }
+
+      setUserAttempts(prev => ({
+        ...prev,
+        [tournament._id]: data.attemptsLeft || prev[tournament._id]
+      }));
+
+      toast.success('Successfully entered tournament!');
+    } catch (error) {
+      console.error('Error entering tournament:', error);
+      toast.error(error.message || 'Failed to enter tournament');
+    } finally {
+      setEnteringStates(prev => ({
+        ...prev,
+        [tournament._id]: false
+      }));
+    }
+  };
+
+  const resolveDebate = async () => {
+    try {
+      const response = await fetch(`/api/tournaments/${id}/debateEnd`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to resolve debate');
+      }
+
+      toast.success('Debate resolved and prizes distributed!');
+      setWinners(data.winners);
+    } catch (error) {
+      console.error('Error resolving debate:', error);
+      toast.error(error.message || 'Failed to resolve debate');
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gradient-to-b from-gray-900 to-black pt-20 p-4">
@@ -159,14 +251,109 @@ export default function Arena() {
   return (
     <div className="min-h-screen bg-gradient-to-b from-gray-900 to-black pt-20 p-4">
       <div className="container mx-auto max-w-4xl">
-        <div className="bg-gray-800/50 rounded-xl p-6 mb-8 border border-purple-500/20">
-          <h2 className="text-xl font-bold text-purple-400 mb-4">
-            {tournament?.name}
-          </h2>
-          <p className="text-gray-300">
-            {tournament?.challengeStatement}
-          </p>
+      <div className="bg-gray-800/50 rounded-xl p-6 mb-8 border border-purple-500/20">
+  <div className="flex flex-col md:flex-row justify-between gap-6">
+    {/* Tournament Details */}
+    <div className="flex-1">
+      <h2 className="text-xl font-bold text-purple-400 mb-4">
+        {tournament?.name}
+      </h2>
+      <p className="text-gray-300 mb-4">
+        {tournament?.challengeStatement}
+      </p>
+      
+      {/* Tournament Stats */}
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mt-4">
+        <div className="bg-gray-700/30 p-2 rounded-lg">
+          <div className="text-xs text-gray-400">Entry Fee</div>
+          <div className="text-sm text-purple-300 truncate">{tournament?.entryFee} ETH</div>
         </div>
+        <div className="bg-gray-700/30 p-2 rounded-lg">
+          <div className="text-xs text-gray-400">Participants</div>
+          <div className="text-sm text-purple-300 truncate">
+            {tournament?.currentParticipants}/{tournament?.maxParticipants}
+          </div>
+        </div>
+        <div className="bg-gray-700/30 p-2 rounded-lg">
+          <div className="text-xs text-gray-400">Mode</div>
+          <div className="text-sm text-purple-300 truncate">{tournament?.mode}</div>
+        </div>
+        <div className="bg-gray-700/30 p-2 rounded-lg">
+          <div className="text-xs text-gray-400">Prize Pool</div>
+          <div className="text-sm text-purple-300 truncate">
+            {tournament?.currentParticipants * tournament?.entryFee} ETH
+          </div>
+        </div>
+        <div className="bg-gray-700/30 p-2 rounded-lg">
+          <div className="text-xs text-gray-400">Distribution</div>
+          <div className="text-sm text-purple-300 truncate">{tournament?.prizeDistribution}</div>
+        </div>
+        <div className="bg-gray-700/30 p-2 rounded-lg">
+          <div className="text-xs text-gray-400">Status</div>
+          <div className="text-sm text-purple-300 truncate">{tournament?.status}</div>
+        </div>
+      </div>
+    </div>
+
+    {/* Entry Button Section */}
+    <div className="flex flex-col justify-center items-center gap-3 min-w-[200px]">
+      <button
+        onClick={() => enterTournament(tournament)}
+        disabled={enteringStates[tournament._id] || tournament.status !== 'ACTIVE' || tournament.currentParticipants >= tournament.maxParticipants}
+        className={`
+          w-full px-6 py-3 bg-purple-500 hover:bg-purple-400 
+          text-white font-medium rounded-xl transition-colors
+          ${enteringStates[tournament._id] ? 'bg-gray-600 text-gray-400 cursor-wait' :
+            tournament.status !== 'ACTIVE' ? 'bg-gray-600 text-gray-400 cursor-not-allowed' :
+            tournament.currentParticipants >= tournament.maxParticipants
+              ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
+              : 'bg-gradient-to-r from-cyan-500 to-purple-500 hover:from-cyan-400 hover:to-purple-400 text-white shadow-lg hover:shadow-purple-500/50'
+          }
+        `}
+      >
+        {enteringStates[tournament._id] ? 'Processing...' :
+          tournament.status !== 'ACTIVE' ? 'Tournament Inactive' :
+          tournament.currentParticipants >= tournament.maxParticipants 
+            ? 'Tournament Full' 
+            : 'Enter Tournament'
+        }
+      </button>
+
+      {/* Resolve Debate Button */}
+      {tournament?.mode === 'DEBATE_ARENA' && (
+        <button
+          onClick={resolveDebate}
+          className="w-full px-6 py-3 mt-2 bg-red-500 hover:bg-red-400 text-white font-medium rounded-xl transition-colors"
+        >
+          Resolve Debate
+        </button>
+      )}
+
+      {canSendMessages && (
+        <div className="bg-gray-700/30 px-4 py-2 rounded-lg">
+          <div className="text-xs text-gray-400">Attempts Left</div>
+          <div className="text-sm text-purple-300 text-center font-medium">
+            {attempts}
+          </div>
+        </div>
+      )}
+    </div>
+  </div>
+</div>
+
+        {/* Display Winners */}
+        {winners.length > 0 && (
+          <div className="bg-gray-800/50 rounded-xl p-6 mb-8 border border-purple-500/20">
+            <h3 className="text-lg font-bold text-purple-400 mb-4">Winners</h3>
+            <ul>
+              {winners.map((winner, index) => (
+                <li key={index} className="text-gray-300">
+                  {index + 1}. {winner.address} - {winner.prize} ETH
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
 
         <div className="bg-gray-800/50 rounded-xl border border-purple-500/20">
           <div className="h-[500px] overflow-y-auto p-6 space-y-4">
