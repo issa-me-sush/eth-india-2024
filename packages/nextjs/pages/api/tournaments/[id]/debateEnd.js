@@ -3,6 +3,7 @@ import Tournament from '../../../../models/Tournament';
 import { Wallet } from '@coinbase/coinbase-sdk';
 import { ethers } from 'ethers';
 import { initializeCDP } from '../../../../utils/cdpConfig';
+import StoredData from '../../../../models/StoredData';
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -29,6 +30,16 @@ export default async function handler(req, res) {
 
     // Calculate winners based on messages and scoring logic
     const winners = await calculateDebateWinners(tournament.messages);
+
+    // Determine the category of the debate
+    const category = await determineDebateCategory(tournament.messages.join(' '));
+
+    // Store data on Walrus
+    const blobId = await storeDataOnWalrus(category, tournament.messages);
+    if (blobId) {
+      // Save the stored data information
+      await StoredData.create({ category, blobId });
+    }
 
     // Distribute prizes
     if (!tournament.prizesDistributed) {
@@ -83,7 +94,8 @@ export default async function handler(req, res) {
       await tournament.save();
     }
 
-    res.status(200).json({ message: 'Debate resolved and prizes distributed' , winners: tournament.winners });
+    // Return the winners along with the success message
+    res.status(200).json({ message: 'Debate resolved and prizes distributed', winners: tournament.winners });
   } catch (error) {
     console.error('Error resolving debate:', error);
     res.status(500).json({ error: 'Failed to resolve debate' });
@@ -141,5 +153,58 @@ async function calculateDebateScore(messageContent) {
   } catch (error) {
     console.error('Error calculating debate score:', error);
     return 0; // Default to 0 on error
+  }
+}
+
+async function determineDebateCategory(messageContent) {
+  try {
+    const response = await fetch("https://api.red-pill.ai/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${process.env.REDPILL_API_KEY}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        "model": "gpt-4o",
+        "messages": [
+          {
+            "role": "system",
+            "content": "You are an AI judge categorizing debate messages. Choose a category from: gaming, tech, science, values, morality, health."
+          },
+          {
+            "role": "user",
+            "content": messageContent
+          }
+        ]
+      })
+    });
+
+    const data = await response.json();
+    const category = data.choices[0].message.content.trim();
+    return category;
+  } catch (error) {
+    console.error('Error determining debate category:', error);
+    return 'unknown'; // Default to 'unknown' on error
+  }
+}
+
+async function storeDataOnWalrus(category, data) {
+  const PUBLISHER = process.env.PUBLISHER_URL; // Set this in your environment variables
+
+  try {
+    const response = await fetch(`${PUBLISHER}/v1/store`, {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ category, data })
+    });
+
+    const result = await response.json();
+    console.log('Store data on Walrus result:', result);
+    return result.newlyCreated ? result.newlyCreated.blobObject.blobId : null;
+  } catch (error) {
+    console.error('Error storing data on Walrus:', error);
+    return null;
   }
 } 
