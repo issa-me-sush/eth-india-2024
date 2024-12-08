@@ -1,8 +1,10 @@
 import mongoose from 'mongoose';
 
 const StoredDataSchema = new mongoose.Schema({
-  category: { type: String, required: true },
-  blobId: { type: String, required: true },
+  category: String,
+  blobId: String,
+  attestationUID: String,
+  attestedBy: String,
   createdAt: { type: Date, default: Date.now }
 });
 

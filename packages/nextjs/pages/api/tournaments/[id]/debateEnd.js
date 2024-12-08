@@ -38,8 +38,39 @@ export default async function handler(req, res) {
     // Store data on Walrus
     const blobId = await storeDataOnWalrus(category, tournament.messages);
     if (blobId) {
-      // Save the stored data information
-      await StoredData.create({ category, blobId });
+      // Create attestation using the tournament's agent wallet
+      try {
+        const attestResponse = await fetch('/api/attestData', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            category,
+            blobId,
+            walletData: tournament.walletData // Pass the wallet data from the tournament
+          })
+        });
+
+        if (!attestResponse.ok) {
+          throw new Error('Attestation request failed');
+        }
+
+        const attestation = await attestResponse.json();
+        console.log('Attestation created:', attestation);
+        
+        // Save the stored data information along with the attestation
+        await StoredData.create({ 
+          category, 
+          blobId,
+          attestationUID: attestation.attestationUID,
+          attestedBy: attestation.attestedBy
+        });
+      } catch (attestError) {
+        console.error('Error creating attestation:', attestError);
+        // Continue execution even if attestation fails
+        await StoredData.create({ category, blobId });
+      }
     }
 
     // Store data on Akave

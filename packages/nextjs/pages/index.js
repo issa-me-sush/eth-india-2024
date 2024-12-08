@@ -2,148 +2,76 @@ import { useState } from 'react';
 import { useOkto } from 'okto-sdk-react';
 
 export default function Home() {
-  const [playerInput, setPlayerInput] = useState('');
-  const [attempts, setAttempts] = useState(3);
-  const [gameHistory, setGameHistory] = useState([]);
-  const [gameStatus, setGameStatus] = useState('ready'); // ready, playing, won, lost
-  const [currentRiddle, setCurrentRiddle] = useState(
-    "I speak without a mouth and hear without ears. I have no body, but I come alive with wind. What am I?"
-  );
-
-  const { isConnected, address , showWidgetModal} = useOkto()
-
-  const handleAttempt = async (e) => {
-    e.preventDefault();
-    if (attempts <= 0 || gameStatus !== 'playing') return;
-
-    try {
-      const response = await fetch('/api/challenge', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ attempt: playerInput }),
-      });
-
-      const data = await response.json();
-
-      setGameHistory(prev => [...prev, {
-        attempt: 4 - attempts,
-        playerMessage: playerInput,
-        aiResponse: data.message,
-        success: data.success
-      }]);
-
-      setAttempts(prev => prev - 1);
-      setPlayerInput('');
-
-      if (data.success) {
-        setGameStatus('won');
-      } else if (attempts <= 1) {
-        setGameStatus('lost');
-      }
-    } catch (error) {
-      console.error('Error:', error);
-    }
-  };
-
-  const startNewGame = () => {
-    setAttempts(3);
-    setGameHistory([]);
-    setGameStatus('playing');
-  };
+  const { isConnected, address, showWidgetModal } = useOkto();
 
   return (
-    <div className="min-h-screen pt-20 p-4">
-      <main className="container mx-auto max-w-2xl">
-        <h1 className="text-4xl font-bold text-center mb-8 text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-purple-500">
-          Neural Garden
+    <div className="min-h-screen pt-20 p-4 bg-gradient-to-br from-black via-purple-900 to-black">
+      <main className="container mx-auto max-w-4xl">
+        <h1 className="text-6xl font-bold text-center mb-8 text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-purple-500">
+          {/* Neural Garden */}
         </h1>
 
-        <div className="bg-black/50 backdrop-blur-sm rounded-xl p-6 border border-purple-500/20">
-          {/* Current Riddle Display */}
-          {gameStatus === 'playing' && (
-            <div className="mb-6 text-center">
-              <h2 className="text-xl text-cyan-400 mb-2">The Riddle:</h2>
-              <p className="text-lg">{currentRiddle}</p>
-            </div>
-          )}
+        <div className="bg-black/50 backdrop-blur-sm rounded-xl p-8 border border-purple-500/20">
+          {/* Main Content */}
+          <div className="space-y-6 text-center">
+            <p className="text-xl text-cyan-400">
+              Your Gateway to the AI-Powered Digital Playground
+            </p>
+            
+            <p className="text-gray-300 text-lg">
+              Explore a boundless realm where AI meets creativity. Engage in debates, 
+              create digital art, solve puzzles, and participate in unique AI-driven 
+              experiences. Neural Garden is your space to learn, create, and evolve.
+            </p>
 
-          {/* Attempts Counter */}
-          <div className="text-purple-400 text-center mb-4">
-            Attempts Remaining: {attempts}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-8">
+              <button
+                onClick={() => window.location.href = '/neural-garden'}
+                className="bg-purple-600 hover:bg-purple-500 text-white font-bold py-4 px-6 rounded-lg transition duration-300 transform hover:scale-105"
+              >
+                Enter Neural Garden
+              </button>
+              
+              <button
+                onClick={() => window.location.href = '/create-new'}
+                className="bg-cyan-600 hover:bg-cyan-500 text-white font-bold py-4 px-6 rounded-lg transition duration-300 transform hover:scale-105"
+              >
+                Create New Experience
+              </button>
+            </div>
           </div>
 
-          {/* Game Controls */}
-          {gameStatus === 'ready' && (
-            <button
-              onClick={startNewGame}
-              className="w-full bg-purple-600 hover:bg-purple-500 text-white font-bold py-3 px-6 rounded-lg transition duration-300 mb-4"
-            >
-              Begin Challenge
-            </button>
-          )}
-
-          {/* Input Area */}
-          {gameStatus === 'playing' && (
-            <form onSubmit={handleAttempt} className="space-y-4">
-              <input
-                type="text"
-                className="w-full bg-gray-800/50 rounded-lg p-3 text-white placeholder-gray-400 border border-purple-500/20"
-                placeholder="Enter your answer..."
-                value={playerInput}
-                onChange={(e) => setPlayerInput(e.target.value)}
-              />
-              <button
-                type="submit"
-                className="w-full bg-cyan-600 hover:bg-cyan-500 text-white font-bold py-3 px-6 rounded-lg transition duration-300"
-              >
-                Submit Answer
-              </button>
-            </form>
-          )}
-
-          {/* Game Over States */}
-          {gameStatus === 'won' && (
-            <div className="text-center space-y-4">
-              <h2 className="text-2xl text-green-400">Challenge Completed!</h2>
-              <button
-                onClick={startNewGame}
-                className="bg-purple-600 hover:bg-purple-500 text-white font-bold py-2 px-4 rounded-lg transition duration-300"
-              >
-                Try Another Riddle
-              </button>
-            </div>
-          )}
-
-          {gameStatus === 'lost' && (
-            <div className="text-center space-y-4">
-              <h2 className="text-2xl text-red-400">Challenge Failed</h2>
-              <button
-                onClick={startNewGame}
-                className="bg-purple-600 hover:bg-purple-500 text-white font-bold py-2 px-4 rounded-lg transition duration-300"
-              >
-                Try Again
-              </button>
-            </div>
-          )}
-
-          {/* Conversation History */}
-          <div className="mt-8 space-y-4">
-            {gameHistory.map((entry, index) => (
-              <div key={index} className={`p-4 rounded-lg ${entry.success ? 'bg-green-900/20' : 'bg-gray-800/20'}`}>
-                <div className="text-purple-400 mb-2">Attempt {entry.attempt}:</div>
-                <div className="mb-2">Your Answer: {entry.playerMessage}</div>
-                <div className="text-cyan-400">Response: {entry.aiResponse}</div>
+          {/* Connect Wallet Section */}
+          <div className="mt-8 text-center">
+            {isConnected ? (
+              <div className="text-cyan-400 font-mono">
+                Connected: {address}
               </div>
-            ))}
+            ) : (
+              <button 
+                onClick={showWidgetModal}
+                className="bg-gradient-to-r from-purple-600 to-cyan-600 hover:from-purple-500 hover:to-cyan-500 text-white font-bold py-3 px-6 rounded-lg transition duration-300"
+              >
+                Connect Wallet
+              </button>
+            )}
           </div>
 
-          {isConnected ? (
-            <div>Connected: {address}</div>
-          ) : (
-            <button onClick={showWidgetModal}>Connect Wallet</button>
-          )}
+          {/* Features Section */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-12">
+            <div className="p-4 bg-purple-900/20 rounded-lg border border-purple-500/20">
+              <h3 className="text-lg font-bold text-cyan-400 mb-2">AI Playground</h3>
+              <p className="text-gray-300">Experiment with cutting-edge AI tools and create unique digital experiences</p>
+            </div>
+            <div className="p-4 bg-purple-900/20 rounded-lg border border-purple-500/20">
+              <h3 className="text-lg font-bold text-cyan-400 mb-2">Neural Rewards</h3>
+              <p className="text-gray-300">Earn tokens for your contributions and creative endeavors</p>
+            </div>
+            <div className="p-4 bg-purple-900/20 rounded-lg border border-purple-500/20">
+              <h3 className="text-lg font-bold text-cyan-400 mb-2">Community Hub</h3>
+              <p className="text-gray-300">Connect with like-minded innovators in our decentralized ecosystem</p>
+            </div>
+          </div>
         </div>
       </main>
     </div>
