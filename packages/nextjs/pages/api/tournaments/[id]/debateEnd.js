@@ -4,6 +4,7 @@ import { Wallet } from '@coinbase/coinbase-sdk';
 import { ethers } from 'ethers';
 import { initializeCDP } from '../../../../utils/cdpConfig';
 import StoredData from '../../../../models/StoredData';
+import { uploadToAkave } from '../../../../utils/akaveStorage';
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -39,6 +40,12 @@ export default async function handler(req, res) {
     if (blobId) {
       // Save the stored data information
       await StoredData.create({ category, blobId });
+    }
+
+    // Store data on Akave
+    const akaveResponse = await uploadToAkave('myBucket', './path/to/debateData.txt');
+    if (akaveResponse) {
+      console.log('Data stored on Akave:', akaveResponse);
     }
 
     // Distribute prizes
